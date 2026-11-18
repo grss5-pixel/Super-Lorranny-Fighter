@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Super Lorranny Fighter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="cena">
+    <aside class="painel painel-p1" id="ctrl-p1"></aside>
+
+    <main class="palco">
+      <canvas id="jogo" width="1094" height="820" tabindex="0"></canvas>
+      <div id="carregando">Carregando…</div>
+
+      <div id="menu" class="oculto" role="dialog" aria-label="Menu de pausa">
+        <div class="menu-caixa">
+          <h2>PAUSA</h2>
+          <p id="menu-modo" class="menu-modo"></p>
+          <button type="button" data-acao="2p">2 JOGADORES</button>
+          <button type="button" data-acao="cpu">1 JOGADOR vs COMPUTADOR</button>
+          <button type="button" data-acao="selecao">TROCAR PERSONAGENS</button>
+          <button type="button" data-acao="continuar">CONTINUAR</button>
+          <p class="dica">↑ ↓ ou W S escolhe · Enter confirma · F2 fecha</p>
+        </div>
+      </div>
+      <div class="crt" aria-hidden="true"></div>
+    </main>
+
+    <aside class="painel painel-p2" id="ctrl-p2"></aside>
+
+    <footer class="dicas">
+      <span><kbd>Esc</kbd> menu</span>
+      <span><kbd>F1</kbd> debug</span>
+      <span><kbd>F3</kbd> efeito de TV</span>
+    </footer>
+  </div>
+
+  <!-- Scripts comuns (sem módulos) para funcionar abrindo o index.html direto no navegador -->
+  <script src="js/config.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

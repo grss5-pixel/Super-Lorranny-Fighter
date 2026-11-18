@@ -1,0 +1,238 @@
+:root {
+  --fundo: #07030f;
+  --roxo: #a62dff;
+  --roxo-claro: #d9b3ff;
+  --ouro: #f5c04a;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--fundo);
+  color: var(--roxo-claro);
+  font-family: "Press Start 2P", "Courier New", monospace;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* O canvas mantém a proporção 1671:941 e cabe na janela inteira,
+   deixando uma faixa embaixo para a legenda dos controles. */
+
+#jogo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  background: #000;
+}
+
+#carregando {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #000;
+  color: var(--roxo-claro);
+  font-size: clamp(12px, 2vw, 22px);
+  letter-spacing: 2px;
+}
+#carregando.erro { color: #ff7a9c; text-align: center; padding: 24px; line-height: 1.8; }
+#carregando.oculto { display: none; }
+
+.controles {
+  height: 44px;
+  display: flex;
+  gap: 22px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  font-size: 10px;
+  color: var(--roxo-claro);
+}
+.controles .sutil { opacity: 0.55; }
+
+kbd {
+  display: inline-block;
+  min-width: 22px;
+  margin-right: 4px;
+  padding: 5px 6px;
+  text-align: center;
+  font: inherit;
+  color: #fff;
+  background: #1c0b3b;
+  border: 2px solid var(--roxo);
+  border-radius: 3px;
+  box-shadow: 0 2px 0 #4b1590;
+}
+
+/* ---------- v2: rodapé em duas linhas, menu de pausa (F2) ---------- */
+.palco {
+  width: min(100vw, calc((100vh - 84px) * 1671 / 941));
+}
+
+.controles {
+  height: auto;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  font-size: 9px;
+  line-height: 1.6;
+  text-align: center;
+}
+.controles b { color: #f5c04a; font-weight: normal; margin-right: 4px; }
+
+#menu {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(7, 3, 15, 0.72);
+  z-index: 5;
+}
+#menu.oculto { display: none; }
+
+.menu-caixa {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: min(80%, 460px);
+  padding: clamp(14px, 3vw, 32px);
+  background: #12062e;
+  border: 3px solid #b04bff;
+  box-shadow: 0 0 30px rgba(166, 45, 255, 0.6);
+  text-align: center;
+}
+.menu-caixa h2 {
+  margin: 0 0 4px;
+  font-size: clamp(14px, 2.4vw, 26px);
+  color: #fff;
+  font-weight: normal;
+}
+.menu-modo { white-space: pre-line; margin: 0; font-size: clamp(8px, 1.1vw, 11px); color: #d9b3ff; line-height: 1.6; }
+.menu-caixa button {
+  font: inherit;
+  font-size: clamp(9px, 1.4vw, 14px);
+  padding: 12px;
+  background: #1c0b3b;
+  color: #f5e6ff;
+  border: 2px solid #7a2bd0;
+  cursor: pointer;
+}
+.menu-caixa button:focus,
+.menu-caixa button[aria-current="true"] { outline: none; border-color: #f5c04a; }
+.menu-caixa button:focus { box-shadow: 0 0 0 2px #f5c04a inset; }
+.menu-caixa .dica { margin: 4px 0 0; font-size: 9px; opacity: 0.7; line-height: 1.7; }
+
+
+/* ---------- v4: tela 4:3 (TV de tubo), controles nas laterais, efeito CRT ---------- */
+.cena {
+  --painel: 200px;
+  display: grid;
+  grid-template-columns: var(--painel) auto var(--painel);
+  grid-template-areas: "p1 tela p2" ". dicas .";
+  justify-content: center;
+  align-items: center;
+  column-gap: 18px;
+  row-gap: 10px;
+}
+.palco {
+  grid-area: tela;
+  position: relative;
+  width: min(calc(100vw - 2 * var(--painel) - 60px), calc((100vh - 48px) * 4 / 3));
+  aspect-ratio: 4 / 3;
+  border-radius: 3.2% / 4.2%;
+  overflow: hidden;
+  box-shadow: 0 0 0 10px #15101f, 0 0 0 12px #2c2340, 0 0 50px rgba(166, 45, 255, 0.35);
+}
+.painel-p1 { grid-area: p1; }
+.painel-p2 { grid-area: p2; }
+.painel {
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--roxo-claro);
+}
+.painel b { display: block; color: var(--ouro); font-weight: normal; margin-bottom: 10px; font-size: 11px; }
+.painel div { display: flex; align-items: center; gap: 8px; margin: 0 0 9px; }
+.painel .teclas { display: inline-flex; gap: 3px; min-width: 56px; }
+.painel-p1 { text-align: left; }
+.painel-p2 { text-align: left; }
+.dicas {
+  grid-area: dicas;
+  height: auto;
+  display: flex;
+  gap: 22px;
+  justify-content: center;
+  font-size: 9px;
+  opacity: 0.75;
+}
+
+#jogo { filter: contrast(1.08) saturate(1.18) brightness(1.04) blur(0.4px); }
+.sem-crt #jogo { filter: none; }
+
+.crt {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(0,0,0,0.24) 3px, rgba(0,0,0,0) 4px),
+    repeating-linear-gradient(to right, rgba(255,0,0,0.05) 0, rgba(255,0,0,0.05) 1px, rgba(0,255,0,0.05) 1px, rgba(0,255,0,0.05) 2px, rgba(0,0,255,0.05) 2px, rgba(0,0,255,0.05) 3px),
+    radial-gradient(ellipse at center, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0) 45%, rgba(0,0,0,0.55) 100%);
+  box-shadow: inset 0 0 70px rgba(0,0,0,0.75), inset 0 0 8px rgba(0,0,0,0.9);
+  animation: cintilar 0.12s infinite;
+}
+.crt::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: -20%;
+  height: 18%;
+  background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.05), rgba(255,255,255,0));
+  animation: rolar 6s linear infinite;
+}
+.sem-crt .crt { display: none; }
+@keyframes cintilar { 0% { opacity: 0.97; } 50% { opacity: 1; } 100% { opacity: 0.95; } }
+@keyframes rolar { from { top: -20%; } to { top: 110%; } }
+
+@media (max-width: 980px) {
+  .cena {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: "tela tela" "p1 p2" "dicas dicas";
+    column-gap: 12px;
+    padding: 0 10px;
+  }
+  .palco { width: min(calc(100vw - 24px), calc((100vh - 200px) * 4 / 3)); justify-self: center; }
+  .painel div { margin-bottom: 4px; }
+}
+
+#menu { backdrop-filter: blur(0); }
+#menu:not(.oculto) { animation: menu-fundo 0.28s ease-out both; }
+#menu:not(.oculto) .menu-caixa { animation: menu-entrar 0.42s cubic-bezier(0.2, 1.25, 0.4, 1) both; }
+#menu:not(.oculto) .menu-caixa > * { animation: menu-item 0.4s ease-out both; }
+#menu:not(.oculto) .menu-caixa > :nth-child(2) { animation-delay: 0.10s; }
+#menu:not(.oculto) .menu-caixa > :nth-child(3) { animation-delay: 0.15s; }
+#menu:not(.oculto) .menu-caixa > :nth-child(4) { animation-delay: 0.20s; }
+#menu:not(.oculto) .menu-caixa > :nth-child(5) { animation-delay: 0.25s; }
+#menu:not(.oculto) .menu-caixa > :nth-child(6) { animation-delay: 0.30s; }
+#menu:not(.oculto) .menu-caixa > :nth-child(7) { animation-delay: 0.35s; }
+#menu.saindo { animation: menu-fundo-sai 0.17s ease-in both; }
+#menu.saindo .menu-caixa { animation: menu-sair 0.17s ease-in both; }
+.menu-modo { white-space: pre-line; }
+
+@keyframes menu-fundo     { from { background: rgba(7, 3, 15, 0); backdrop-filter: blur(0); } to { background: rgba(7, 3, 15, 0.72); backdrop-filter: blur(3px); } }
+@keyframes menu-fundo-sai { from { background: rgba(7, 3, 15, 0.72); } to { background: rgba(7, 3, 15, 0); } }
+@keyframes menu-entrar    { from { opacity: 0; transform: translateY(-40px) scale(0.86); } to { opacity: 1; transform: none; } }
+@keyframes menu-sair      { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-24px) scale(0.92); } }
+@keyframes menu-item      { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  #menu, #menu .menu-caixa, #menu .menu-caixa > * { animation: none !important; }
+}
