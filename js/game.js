@@ -131,12 +131,17 @@
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Escape') {
       e.preventDefault();
-      if (telaMenuPrincipal) return; // no menu principal não há pausa
-      if (telaSelecao && !menuAberto) { // na seleção (personagem ou arena): Esc volta ao menu principal
-        if (!e.repeat && sel.vsT === null) fadeOut(abrirMenuPrincipal);
+      if (telaMenuPrincipal || e.repeat) return;
+      if (menuAberto) {              // na pausa: Esc volta ao menu principal
+        fecharMenu();
+        fadeOut(abrirMenuPrincipal);
         return;
       }
-      if (!e.repeat) (menuAberto ? fecharMenu() : abrirMenu());
+      if (telaSelecao) {             // na seleção de personagem ou arena: Esc volta ao menu principal
+        if (sel.vsT === null) fadeOut(abrirMenuPrincipal);
+        return;
+      }
+      abrirMenu();                   // durante a luta: Esc abre a pausa
       return;
     }
     if (menuAberto) {
