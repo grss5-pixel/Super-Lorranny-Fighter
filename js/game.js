@@ -132,6 +132,10 @@
     if (e.code === 'Escape') {
       e.preventDefault();
       if (telaMenuPrincipal) return; // no menu principal não há pausa
+      if (telaSelecao && !menuAberto) { // na seleção (personagem ou arena): Esc volta ao menu principal
+        if (!e.repeat && sel.vsT === null) fadeOut(abrirMenuPrincipal);
+        return;
+      }
       if (!e.repeat) (menuAberto ? fecharMenu() : abrirMenu());
       return;
     }
