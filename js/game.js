@@ -45,6 +45,12 @@
     tempoFight: 0.8,     // segundos do banner "FIGHT!"
     tempoVitoria: 3.4,   // segundos da tela de vitória da partida
   }, CONFIG.partida || {});
+  // Menu principal: imagem de fundo, logo e qual trecho do cenário aparece (cameraX = coluna da imagem na borda esquerda)
+  const MENU_P = Object.assign({
+    fundo: 'assets/ui/menu-fundo.png',
+    logo: 'assets/ui/logo.png',
+    cameraX: 258,
+  }, CONFIG.menuPrincipal || {});
 
   function carregarImagem(url) {
     if (imagens[url]) return Promise.resolve(imagens[url]);
@@ -57,7 +63,7 @@
   }
 
   async function carregarTudo() {
-    const urls = [CONFIG.arena.fundo, ...ARENAS.map((a) => a.fundo)];
+    const urls = [CONFIG.arena.fundo, MENU_P.fundo, MENU_P.logo, ...ARENAS.map((a) => a.fundo)];
     for (const e of ELENCO) {
       if (e.bloqueado) continue;
       urls.push(e.retrato);
@@ -125,6 +131,7 @@
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Escape') {
       e.preventDefault();
+      if (telaMenuPrincipal) return; // no menu principal não há pausa
       if (!e.repeat) (menuAberto ? fecharMenu() : abrirMenu());
       return;
     }
@@ -141,6 +148,7 @@
     }
     if (e.code === 'F1') { e.preventDefault(); debug = !debug; return; }
     if (e.code === 'F3') { e.preventDefault(); if (!e.repeat) palco.classList.toggle('sem-crt'); return; }
+    if (telaMenuPrincipal) { menuPrincipalTecla(e); return; }
     if (telaSelecao) { selecaoTecla(e); return; } // na seleção de personagens as teclas só movem/confirmam
 
     const b = acharAcao(e);
@@ -233,6 +241,9 @@
   function acaoMenu(acao) {
     if (acao === '2p' || acao === 'cpu') {
       definirModo(acao);
+    } else if (acao === 'principal') {
+      fecharMenu();
+      abrirMenuPrincipal();
     } else if (acao === 'selecao') {
       fecharMenu();
       abrirSelecao();
@@ -1272,6 +1283,14 @@
   }
 
   function desenhar() {
+    if (telaMenuPrincipal) desenharMenuPrincipal(); else desenharCena();
+    if (fade.v > 0) { // transição (fundo preto)
+      ctx.fillStyle = `rgba(0,0,0,${Math.min(1, fade.v)})`;
+      ctx.fillRect(0, 0, CONFIG.tela.largura, CONFIG.tela.altura);
+    }
+  }
+
+  function desenharCena() {
     if (telaSelecao) { desenharSelecao(); return; }
     const VW = CONFIG.tela.largura, VH = CONFIG.tela.altura;
     ctx.imageSmoothingEnabled = true;
@@ -1412,7 +1431,13 @@
     if (sel.vsT !== null) return; // já está na tela "VS"
     if (telaArena) { arenaTecla(e); return; }
     if (e.code === 'Enter') { e.preventDefault(); if (!e.repeat) confirmarSelecao(0); return; }
-    if (e.code === 'Backspace') { e.preventDefault(); if (!e.repeat) { cancelarSelecao(1); cancelarSelecao(0); } return; }
+    if (e.code === 'Backspace') {
+      e.preventDefault();
+      if (e.repeat) return;
+      if (!sel.ok[0] && !sel.ok[1]) fadeOut(abrirMenuPrincipal); // ninguém escolheu ainda: volta ao menu principal
+      else { cancelarSelecao(1); cancelarSelecao(0); }
+      return;
+    }
     const b = acharAcao(e);
     if (!b) return;
     e.preventDefault();
@@ -1723,6 +1748,209 @@
     }
   }
 
+  /* ------------------------------------------------------------------ 6c */
+  /* ---------- Menu principal ---------- */
+  let telaMenuPrincipal = false;
+  const menuP = { pagina: 'principal', sel: 0, t: 0, entrouEm: 0, aviso: '', avisoT: 0 };
+  const fade = { v: 0, dir: 0, cb: null }; // v = opacidade do preto; dir 1 = escurecendo, -1 = clareando
+  const BTN = { w: 360, h: 60, cx: 630, y0: 372, passo: 80, inclina: 16 };
+
+  function fadeOut(cb) { if (fade.dir > 0) return; fade.dir = 1; fade.cb = cb; }
+  function atualizarFade(dt) {
+    if (fade.dir > 0) {
+      fade.v = Math.min(1, fade.v + dt * 3.5);
+      if (fade.v >= 1) { fade.dir = -1; const cb = fade.cb; fade.cb = null; if (cb) cb(); }
+    } else if (fade.dir < 0) {
+      fade.v = Math.max(0, fade.v - dt * 3);
+      if (fade.v <= 0) fade.dir = 0;
+    }
+  }
+
+  function abrirMenuPrincipal() {
+    telaMenuPrincipal = true;
+    telaSelecao = false; telaArena = false;
+    menuP.pagina = 'principal'; menuP.sel = 0; menuP.entrouEm = menuP.t; menuP.aviso = '';
+    soltarTudo();
+  }
+
+  function irPagina(p) { menuP.pagina = p; menuP.sel = 0; menuP.entrouEm = menuP.t - 0.3; }
+
+  function irParaSelecao(m) {
+    fadeOut(() => {
+      modo = m;
+      atualizarRodape();
+      atualizarMenu();
+      telaMenuPrincipal = false;
+      novaPartida();
+      abrirSelecao();
+    });
+  }
+
+  // itens de cada página (rot pode ser texto ou função, para botões que mudam de texto)
+  function paginaMenu() {
+    const voltar = { rot: 'VOLTAR', acao: () => irPagina('principal') };
+    if (menuP.pagina === 'arcade') {
+      return { titulo: 'ARCADE', itens: [
+        { rot: '1 JOGADOR vs CPU', acao: () => irParaSelecao('cpu') },
+        { rot: '2 JOGADORES', acao: () => irParaSelecao('2p') },
+        voltar,
+      ] };
+    }
+    if (menuP.pagina === 'config') {
+      return { titulo: 'CONFIGURAÇÕES', itens: [
+        { rot: () => 'EFEITO DE TV: ' + (palco.classList.contains('sem-crt') ? 'NÃO' : 'SIM'), acao: () => palco.classList.toggle('sem-crt') },
+        voltar,
+      ] };
+    }
+    return { titulo: '', itens: [
+      { rot: 'CAMPANHA', acao: () => { menuP.aviso = 'CAMPANHA EM BREVE!'; menuP.avisoT = 1.6; } },
+      { rot: 'ARCADE', acao: () => irPagina('arcade') },
+      { rot: 'CONFIGURAÇÕES', acao: () => irPagina('config') },
+    ] };
+  }
+
+  function ativarMenu() {
+    if (fade.dir !== 0) return;
+    const it = paginaMenu().itens[menuP.sel];
+    if (it) it.acao();
+  }
+
+  function menuPrincipalTecla(e) {
+    if (fade.dir !== 0) return;
+    const n = paginaMenu().itens.length;
+    const c = e.code;
+    if (c === 'ArrowUp' || c === 'KeyW') menuP.sel = (menuP.sel + n - 1) % n;
+    else if (c === 'ArrowDown' || c === 'KeyS') menuP.sel = (menuP.sel + 1) % n;
+    else if ((c === 'Enter' || c === 'Space' || c === 'KeyF' || e.key === ',') && !e.repeat) ativarMenu();
+    else if ((c === 'Backspace' || c === 'KeyG' || e.key === '.') && !e.repeat) { if (menuP.pagina !== 'principal') irPagina('principal'); }
+    else return;
+    e.preventDefault();
+  }
+
+  function botaoSobMouse(ev) {
+    const r = canvas.getBoundingClientRect();
+    const x = (ev.clientX - r.left) * CONFIG.tela.largura / r.width;
+    const y = (ev.clientY - r.top) * CONFIG.tela.altura / r.height;
+    const n = paginaMenu().itens.length;
+    for (let i = 0; i < n; i++) {
+      const by = BTN.y0 + i * BTN.passo;
+      if (x >= BTN.cx - BTN.w / 2 && x <= BTN.cx + BTN.w / 2 && y >= by && y <= by + BTN.h) return i;
+    }
+    return -1;
+  }
+  canvas.addEventListener('mousemove', (ev) => {
+    if (!telaMenuPrincipal) { canvas.style.cursor = ''; return; }
+    const i = botaoSobMouse(ev);
+    if (i >= 0) menuP.sel = i;
+    canvas.style.cursor = i >= 0 ? 'pointer' : '';
+  });
+  canvas.addEventListener('click', (ev) => {
+    if (!telaMenuPrincipal || menuAberto) return;
+    const i = botaoSobMouse(ev);
+    if (i >= 0) { menuP.sel = i; ativarMenu(); }
+  });
+
+  function atualizarMenuPrincipal(dt) {
+    menuP.t += dt;
+    if (menuP.avisoT > 0) menuP.avisoT -= dt;
+  }
+
+  function desenharBotao(rot, x, y, sele, t) {
+    const w = BTN.w, h = BTN.h, s = BTN.inclina;
+    const dx = sele ? 12 + Math.sin(t * 8) * 2 : 0;
+    ctx.save();
+    ctx.translate(x + dx, y);
+    const pts = [[s, 0], [w, 0], [w - s, h], [0, h]];
+    poligono(pts);
+    if (sele) {
+      const g = ctx.createLinearGradient(0, 0, w, 0);
+      g.addColorStop(0, '#6a1fc2'); g.addColorStop(1, '#d02fb0');
+      ctx.fillStyle = g;
+      ctx.shadowColor = '#ff5ad2';
+      ctx.shadowBlur = 20 + Math.sin(t * 6) * 6;
+    } else {
+      ctx.fillStyle = 'rgba(22,8,54,0.82)';
+    }
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = sele ? 4 : 3;
+    ctx.strokeStyle = sele ? '#ffd24a' : '#7a2bd0';
+    ctx.stroke();
+    if (sele) { // seta piscando ao lado
+      ctx.fillStyle = '#ffd24a';
+      const ax = -22 + Math.sin(t * 8) * 4;
+      ctx.beginPath(); ctx.moveTo(ax, h / 2 - 12); ctx.lineTo(ax + 16, h / 2); ctx.lineTo(ax, h / 2 + 12); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    textoSel(rot, x + dx + w / 2, y + h / 2 + 2, rot.length > 15 ? 15 : 20, sele ? '#ffffff' : '#e6d0ff');
+  }
+
+  function desenharMenuPrincipal() {
+    const VW = CONFIG.tela.largura, VH = CONFIG.tela.altura, T = menuP.t;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    // cenário: enquadra a Lorranny (esquerda) e a torre da Crown Corp (direita), com uma deriva lenta
+    const bg = imagens[MENU_P.fundo];
+    const k = VH / bg.height, sw = VW / k;
+    const sx = Math.max(0, Math.min(bg.width - sw, MENU_P.cameraX + Math.sin(T * 0.3) * 12));
+    ctx.drawImage(bg, sx, 0, sw, bg.height, 0, 0, VW, VH);
+
+    // vinheta + escurecimento embaixo (para os botões)
+    const gv = ctx.createRadialGradient(VW / 2, VH * 0.45, VH * 0.35, VW / 2, VH * 0.5, VH * 0.95);
+    gv.addColorStop(0, 'rgba(10,2,26,0)'); gv.addColorStop(1, 'rgba(10,2,26,0.6)');
+    ctx.fillStyle = gv; ctx.fillRect(0, 0, VW, VH);
+    const gb = ctx.createLinearGradient(0, VH * 0.55, 0, VH);
+    gb.addColorStop(0, 'rgba(10,2,26,0)'); gb.addColorStop(1, 'rgba(10,2,26,0.7)');
+    ctx.fillStyle = gb; ctx.fillRect(0, VH * 0.55, VW, VH * 0.45);
+
+    // brasas neon subindo
+    for (let i = 0; i < 36; i++) {
+      const vel = 18 + (i % 5) * 9;
+      const y = VH + 20 - ((T * vel + i * 61) % (VH + 40));
+      const x = ((i * 139.7) % VW) + Math.sin(T * 0.8 + i) * 14;
+      ctx.globalAlpha = 0.25 + 0.35 * Math.abs(Math.sin(T * 1.3 + i));
+      ctx.fillStyle = i % 3 === 0 ? '#ffd24a' : (i % 3 === 1 ? '#ff5ad2' : '#c9a0ff');
+      const t = 2 + (i % 3);
+      ctx.fillRect(Math.round(x), Math.round(y), t, t);
+    }
+    ctx.globalAlpha = 1;
+
+    // logo: cai com um "pop" e depois flutua com brilho pulsante
+    const logo = imagens[MENU_P.logo];
+    const lw = 480, lh = lw * logo.height / logo.width;
+    const e = Math.max(0, Math.min(1, (T - menuP.entrouEm - 0.1) / 0.7));
+    const ease = 1 - Math.pow(1 - e, 3);
+    const esc = 1 + (1 - ease) * 0.6;
+    ctx.save();
+    ctx.globalAlpha = ease;
+    ctx.translate(BTN.cx, 26 + lh / 2 + Math.sin(T * 1.6) * 5 - (1 - ease) * 40);
+    ctx.scale(esc, esc);
+    ctx.shadowColor = '#c15cff';
+    ctx.shadowBlur = 20 + Math.sin(T * 3) * 8;
+    ctx.drawImage(logo, -lw / 2, -lh / 2, lw, lh);
+    ctx.restore();
+
+    // botões entram da direita, um depois do outro
+    const pag = paginaMenu();
+    if (pag.titulo) textoSel(pag.titulo, BTN.cx, BTN.y0 - 26, 13, '#d9b3ff');
+    pag.itens.forEach((it, i) => {
+      const ent = Math.max(0, Math.min(1, (T - menuP.entrouEm - 0.5 - i * 0.12) / 0.35));
+      const ee = 1 - Math.pow(1 - ent, 3);
+      if (ee <= 0) return;
+      ctx.save();
+      ctx.globalAlpha = ee;
+      const rot = typeof it.rot === 'function' ? it.rot() : it.rot;
+      desenharBotao(rot, BTN.cx - BTN.w / 2 + (1 - ee) * 420, BTN.y0 + i * BTN.passo, i === menuP.sel, T);
+      ctx.restore();
+    });
+
+    if (menuP.avisoT > 0) {
+      if (Math.floor(menuP.avisoT * 8) % 2 === 0) textoSel(menuP.aviso, BTN.cx, BTN.y0 + 3 * BTN.passo + 8, 13, '#ff9be6');
+    }
+    textoSel(pag.titulo ? 'SETAS OU W S ESCOLHEM   ENTER CONFIRMA   BACKSPACE VOLTA' : 'SETAS OU W S ESCOLHEM   ENTER CONFIRMA', VW / 2, 786, 10, '#d9b3ff');
+  }
+
   function coberturaImagem(im, x, y, w, h, alpha = 1) { // desenha a imagem preenchendo o retângulo (corta o excesso)
     const k = Math.max(w / im.width, h / im.height);
     const sw = w / k, sh = h / k;
@@ -1960,7 +2188,10 @@
       if (dt > 0) fpsMedido = fpsMedido * 0.92 + (1 / dt) * 0.08;
       dt = Math.min(dt, 0.05); // evita saltos se a aba ficar em segundo plano
 
-      if (telaSelecao) {
+      atualizarFade(dt);
+      if (telaMenuPrincipal) {
+        atualizarMenuPrincipal(dt);
+      } else if (telaSelecao) {
         if (!menuAberto) atualizarSelecao(dt);
       } else if (!menuAberto && paradaT > 0) {
         paradaT -= dt; // jogo congelado (hit-stop); os apertos de tecla ficam guardados
@@ -1996,7 +2227,7 @@ if (fimDeLuta && (fimDeLuta.tempo -= dt) <= 0) {
       }
       for (const l of ['esq', 'dir']) partida.perdaT[l] = Math.max(0, partida.perdaT[l] - dt * 1.3);
       if (menuAberto) limparPendentes();
-      if (!telaSelecao) atualizarCamera(dt);
+      if (!telaSelecao && !telaMenuPrincipal) atualizarCamera(dt);
 
       desenhar();
       requestAnimationFrame(quadro);
@@ -2015,12 +2246,12 @@ if (fimDeLuta && (fimDeLuta.tempo -= dt) <= 0) {
       avisoCarregando.classList.add('oculto');
       canvas.focus();
       atualizarMenu();
-      abrirSelecao(); // o jogo começa na tela de seleção de personagens
+      abrirMenuPrincipal(); // o jogo começa no menu principal
       iniciarLoop();
       window.__jogo = {
         get lorranny() { return lorranny; }, get vitor() { return vitor; },
-        teclas, pendentes, cpu, hud, CONFIG, combos, cam, sel, abrirSelecao, partida, arenaSel,
-        get telaArena() { return telaArena; }, get introT() { return introT; }, get fimDeLuta() { return fimDeLuta; },
+        teclas, pendentes, cpu, hud, CONFIG, combos, cam, sel, abrirSelecao, abrirMenuPrincipal, menuP, fade, partida, arenaSel,
+        get telaArena() { return telaArena; }, get telaMenuPrincipal() { return telaMenuPrincipal; }, get introT() { return introT; }, get fimDeLuta() { return fimDeLuta; },
         get mostrarTags() { return mostrarTags; }, get arenaFinal() { return arenaFinal; },
         energiaEspecial, ganharEspecial, especialCheio, gastarEspecial,
         get telaSelecao() { return telaSelecao; },
