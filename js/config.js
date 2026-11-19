@@ -859,7 +859,7 @@ const DEF_MANU = {
     // provisório: guarda da folha de soco (quadros 0 e 4)
     parado: {
       arquivo: 'assets/sprites/manu-soco.png',
-      escala: 1.15,
+      escala: 1.05,
       quadros: [
         [10, 345, 303, 415, 183.0],   // 0 guarda
         [336, 356, 259, 404, 485.0],   // 1
@@ -872,7 +872,7 @@ const DEF_MANU = {
  
     andando: {
       arquivo: 'assets/sprites/manu-andando.png',
-      escala: 0.87,
+      escala: 0.77,
       quadros: [
         [2, 174, 261, 562, 178.0],      // 0
         [347, 178, 287, 558, 535.0],    // 1
@@ -885,7 +885,7 @@ const DEF_MANU = {
  
     agachar: {
       arquivo: 'assets/sprites/manu-agachar.png',
-      escala: 1.1,
+      escala: 1.0,
       quadros: [
         [22, 303, 316, 410, 190.0],   // 0
         [398, 355, 249, 356, 541.0],   // 1
@@ -904,7 +904,7 @@ const DEF_MANU = {
     // pulo: ficam de fora o 1º quadro (em pé), o 2º (agachada) e o último (aterrissagem)
     pulo: {
       arquivo: 'assets/sprites/manu-pulo.png',
-      escala: 1.6,
+      escala: 1.5,
       quadros: [
         [79, 39, 230, 286, 208.0],   // 0 (ignorado)
         [477, 65, 188, 259, 585.0],   // 1 (ignorado)
@@ -926,7 +926,7 @@ const DEF_MANU = {
  
     dano: {
       arquivo: 'assets/sprites/manu-dano.png',
-      escala: 0.75,
+      escala: 0.65,
       quadros: [
         [297, 191, 496, 607, 574.0],   // 0 impacto
         [972, 181, 500, 617, 1259.0],   // 1 recuo
@@ -938,7 +938,7 @@ const DEF_MANU = {
     // só vieram 2 quadros (preparação e bloqueio); ao soltar a tecla ela volta pelo quadro de preparação
     defesa: {
       arquivo: 'assets/sprites/manu-defesa.png',
-      escala: 0.64,
+      escala: 0.54,
       quadros: [
         [248, 113, 484, 693, 511.0],   // 0 preparação
         [1004, 141, 483, 665, 1266.0],   // 1 bloqueio (guarda ativa)
@@ -955,7 +955,7 @@ const DEF_MANU = {
     // voando (no ar) → caindo/batendo no chão → derrotada (fica deitada)
     derrota: {
       arquivo: 'assets/sprites/manu-derrota.png',
-      escala: 0.80,
+      escala: 0.70,
       quadros: [
         [12, 171, 453, 540, 312.0],     // 0 voando
         [555, 358, 582, 365, 809.0],    // 1 caindo / batendo no chão
@@ -972,7 +972,7 @@ const DEF_MANU = {
     // ---------------- GOLPES EM PÉ ----------------
     soco: {
       arquivo: 'assets/sprites/manu-soco.png',
-      escala: 1.15,
+      escala: 1.05,
       quadros: [
         [10, 345, 303, 415, 183.0],   // 0 preparação
         [336, 356, 259, 404, 485.0],   // 1 recuo do braço
@@ -981,12 +981,12 @@ const DEF_MANU = {
         [1268, 356, 255, 409, 1430.0],   // 4 volta à guarda
       ],
       sequencia: [0, 1, 2, 3, 4], duracao: [45, 60, 110, 80, 60], loop: false,
-      ataque: { quadros: [2], x: 40, y: -354, w: 179, h: 90 },
+      ataque: { quadros: [2], x: 40, y: -334, w: 179, h: 50 },
     },
  
     chute: {
       arquivo: 'assets/sprites/manu-chute.png',
-      escala: 1.25,
+      escala: 1.15,
       quadros: [
         [15, 337, 298, 377, 172.0],   // 0 preparação
         [355, 330, 221, 385, 515.0],   // 1 joelho
@@ -1001,7 +1001,7 @@ const DEF_MANU = {
     // ---------------- GOLPES AGACHADA ----------------
     socoAgachado: {
       arquivo: 'assets/sprites/manu-soco-agachado.png',
-      escala: 1.25,
+      escala: 1.15,
       quadros: [
         [29, 415, 228, 275, 155.0],   // 0
         [372, 422, 278, 267, 502.0],   // 1
@@ -1015,7 +1015,7 @@ const DEF_MANU = {
  
     chuteAgachado: {
       arquivo: 'assets/sprites/manu-chute-agachado.png',
-      escala: 1.28,
+      escala: 1.18,
       quadros: [
         [29, 365, 216, 259, 152.0],   // 0
         [324, 402, 302, 222, 440.0],   // 1
@@ -1030,7 +1030,7 @@ const DEF_MANU = {
     // ---------------- GOLPES NO AR ----------------
     socoAereo: {
       arquivo: 'assets/sprites/manu-soco-aereo.png',
-      escala: 1.25,
+      escala: 1.15,
       quadros: [
         [48, 265, 224, 305, 188.0],   // 0
         [394, 268, 247, 350, 529.0],   // 1
@@ -1044,7 +1044,7 @@ const DEF_MANU = {
  
     chuteAereo: {
       arquivo: 'assets/sprites/manu-chute-aereo.png',
-      escala: 1.2,
+      escala: 1.1,
       quadros: [
         [9, 266, 243, 358, 152.0],   // 0
         [336, 283, 263, 385, 503.0],   // 1
