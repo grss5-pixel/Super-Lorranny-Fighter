@@ -51,6 +51,17 @@
     logo: 'assets/ui/logo.png',
     cameraX: 258,
   }, CONFIG.menuPrincipal || {});
+  // Modo campanha (CONFIG.campanha): cutscenes, fases e textos das telas de resultado
+  const CAMPANHA = Object.assign({
+    heroi: 'lorranny',        // id (em ELENCO) do personagem do jogador
+    fases: [],                // { inimigo: id, arena: id, cpu: { ...ajustes da CPU nesta fase } }
+    cutsceneInicial: [],      // cenas: { imagem, foco, zoom, cameraX, falas: [{ quem, texto }] }
+    tempoCarta: 2.6,          // segundos do cartão "FASE N" antes da luta
+    velocidadeTexto: 45,      // letras por segundo nas cutscenes
+    textoDerrota: 'A RADICALIDADE DO MUNDO DEPENDE DE VOCÊ!',
+    textoFim: 'A LUTA FINAL CONTRA O VITOR VEM AÍ!',
+  }, CONFIG.campanha || {});
+  const campanha = { ativa: false, fase: 0 }; // estado da campanha em andamento
 
   function carregarImagem(url) {
     if (imagens[url]) return Promise.resolve(imagens[url]);
@@ -64,6 +75,7 @@
 
   async function carregarTudo() {
     const urls = [CONFIG.arena.fundo, MENU_P.fundo, MENU_P.logo, ...ARENAS.map((a) => a.fundo)];
+    for (const c of CAMPANHA.cutsceneInicial) if (c.imagem) urls.push(c.imagem);
     for (const e of ELENCO) {
       if (e.bloqueado) continue;
       urls.push(e.retrato);
@@ -132,6 +144,8 @@
     if (e.code === 'Escape') {
       e.preventDefault();
       if (telaMenuPrincipal || e.repeat) return;
+      if (telaCutscene) { pularCutscene(); return; }  // cutscene: Esc pula
+      if (telaInter) { interTecla(e); return; }       // telas da campanha: Esc volta ao menu principal
       if (menuAberto) {              // na pausa: Esc volta ao menu principal
         fecharMenu();
         fadeOut(abrirMenuPrincipal);
@@ -158,6 +172,8 @@
     if (e.code === 'F1') { e.preventDefault(); debug = !debug; return; }
     if (e.code === 'F3') { e.preventDefault(); if (!e.repeat) palco.classList.toggle('sem-crt'); return; }
     if (telaMenuPrincipal) { menuPrincipalTecla(e); return; }
+    if (telaCutscene) { cutsceneTecla(e); return; }
+    if (telaInter) { interTecla(e); return; }
     if (telaSelecao) { selecaoTecla(e); return; } // na seleção de personagens as teclas só movem/confirmam
 
     const b = acharAcao(e);
@@ -197,13 +213,21 @@
 
   /* ---------- menu de pausa (F2) ---------- */
   let avisoMenu = ''; // ex.: quem venceu a luta
+  function botoesVisiveis() { return menuBotoes.filter((b) => b.style.display !== 'none'); }
+
   function atualizarMenu() {
-    menuModo.textContent = (avisoMenu ? avisoMenu + '\n' : '') + (modo === 'cpu'
-      ? 'modo atual: 1 JOGADOR (P1) vs COMPUTADOR (P2)'
-      : 'modo atual: 2 JOGADORES');
-    menuBotoes.forEach((b) => b.setAttribute('aria-current', String(
-      (b.dataset.acao === '2p' && modo === '2p') || (b.dataset.acao === 'cpu' && modo === 'cpu')
-    )));
+    menuModo.textContent = (avisoMenu ? avisoMenu + '\n' : '') + (campanha.ativa
+      ? 'modo atual: CAMPANHA - FASE ' + (campanha.fase + 1) + '/' + CAMPANHA.fases.length
+      : modo === 'cpu'
+        ? 'modo atual: 1 JOGADOR (P1) vs COMPUTADOR (P2)'
+        : 'modo atual: 2 JOGADORES');
+    const escondidos = campanha.ativa ? ['2p', 'cpu', 'selecao'] : [];
+    menuBotoes.forEach((b) => {
+      b.style.display = escondidos.includes(b.dataset.acao) ? 'none' : '';
+      b.setAttribute('aria-current', String(
+        !campanha.ativa && ((b.dataset.acao === '2p' && modo === '2p') || (b.dataset.acao === 'cpu' && modo === 'cpu'))
+      ));
+    });
   }
 
   function linhasControles(titulo, itens) {
@@ -221,8 +245,9 @@
   }
 
   function focar(i) {
-    focoMenu = (i + menuBotoes.length) % menuBotoes.length;
-    menuBotoes[focoMenu].focus();
+    const bs = botoesVisiveis();
+    focoMenu = (i + bs.length) % bs.length;
+    bs[focoMenu].focus();
   }
 
   let menuTimer = null;
@@ -234,7 +259,8 @@
     clearTimeout(menuTimer);
     menuEl.classList.remove('saindo');
     menuEl.classList.remove('oculto'); // o CSS (menu-entrar) anima a entrada
-    focar(modo === 'cpu' ? 1 : 0);
+    const iContinuar = botoesVisiveis().findIndex((b) => b.dataset.acao === 'continuar');
+    focar(campanha.ativa ? Math.max(0, iContinuar) : (modo === 'cpu' ? 1 : 0));
   }
 
   function fecharMenu() {
@@ -262,6 +288,7 @@
   }
 
   function definirModo(m) {
+    campanha.ativa = false;
     modo = m;
     atualizarRodape();
     novaPartida();
@@ -569,6 +596,12 @@
 
   /* ------------------------------------------------------------------ 4 */
   // Computador (modo 1 jogador): gera as mesmas entradas que o teclado.
+  // ajustes da CPU: os de CONFIG.cpu, com os da fase da campanha por cima (se estiver na campanha)
+  function cfgCpu() {
+    const f = campanha.ativa ? CAMPANHA.fases[campanha.fase] : null;
+    return f && f.cpu ? Object.assign({}, CONFIG.cpu, f.cpu) : CONFIG.cpu;
+  }
+
   const cpu = {
     tempo: 0.8,          // tempo até poder atacar de novo
     planoAgachado: null, // 'soco' | 'chute': ataque agachado pendente (precisa ficar agachado antes)
@@ -584,10 +617,10 @@
       if (this.planoAgachado) {
         this.planoT -= dt;
         e.baixo = true;
-        if (eu.estado === 'agachar' && eu.podeAtacar) {
+        if (eu.estado === 'agachar' && eu.podeAtacar(this.planoAgachado)) {
           e[this.planoAgachado === 'soco' ? 'socoApertado' : 'chuteApertado'] = true;
           this.planoAgachado = null;
-          this.tempo = this.sortear(CONFIG.cpu.pausaMin, CONFIG.cpu.pausaMax);
+          this.tempo = this.sortear(cfgCpu().pausaMin, cfgCpu().pausaMax);
         } else if (this.planoT <= 0) {
           this.planoAgachado = null;
         }
@@ -597,12 +630,12 @@
       if (eu.estado === 'dano' || eu.atacando) return e;
 
       const dx = outro.x - eu.x;
-      const perto = Math.abs(dx) <= CONFIG.cpu.alcance;
+      const perto = Math.abs(dx) <= cfgCpu().alcance;
 
       // defesa: a cada ataque do oponente que chega perto, sorteia uma vez se vai bloquear
       if (outro.atacando && !this.viuAtaque) {
         this.viuAtaque = true;
-        if (perto && !eu.noAr && Math.random() < CONFIG.cpu.chanceDefender) this.defendeT = this.sortear(0.35, 0.7);
+        if (perto && !eu.noAr && Math.random() < cfgCpu().chanceDefender) this.defendeT = this.sortear(0.35, 0.7);
       } else if (!outro.atacando) {
         this.viuAtaque = false;
       }
@@ -613,9 +646,9 @@
       }
 
       if (eu.noAr) {
-        if (perto && this.tempo <= 0 && eu.podeAtacar) {
+        if (perto && this.tempo <= 0 && eu.podeAtacar('soco') && eu.podeAtacar('chute')) {
           e[Math.random() < 0.5 ? 'socoApertado' : 'chuteApertado'] = true;
-          this.tempo = this.sortear(CONFIG.cpu.pausaMin, CONFIG.cpu.pausaMax);
+          this.tempo = this.sortear(cfgCpu().pausaMin, cfgCpu().pausaMax);
         }
         return e;
       }
@@ -626,7 +659,7 @@
         return e;
       }
 
-      if (this.tempo > 0 || !eu.podeAtacar) {
+      if (this.tempo > 0 || !(eu.podeAtacar('soco') && eu.podeAtacar('chute'))) {
         // espera perto, às vezes recuando um pouco
         if (Math.random() < dt * 0.7) { if (dx > 0) e.esq = true; else e.dir = true; }
         return e;
@@ -642,7 +675,7 @@
         this.planoT = 0.5;
         e.baixo = true;
       }
-      if (!this.planoAgachado) this.tempo = this.sortear(CONFIG.cpu.pausaMin, CONFIG.cpu.pausaMax);
+      if (!this.planoAgachado) this.tempo = this.sortear(cfgCpu().pausaMin, cfgCpu().pausaMax);
       return e;
     },
   };
@@ -1079,7 +1112,7 @@
     ctx.font = `11px ${FONTE}`;
     ctx.textAlign = 'center';
     ctx.fillStyle = '#d9b3ff';
-    ctx.fillText(modo === 'cpu' ? '1P vs CPU' : '2 JOGADORES', cx, cy + 76);
+    ctx.fillText(rotuloModo(), cx, cy + 76);
     ctx.restore();
 
     barraEspecial('esq', hud.especialEsq);
@@ -1152,6 +1185,10 @@
     ctx.beginPath(); ctx.moveTo(-8, 13); ctx.lineTo(8, 13); ctx.lineTo(0, 24); ctx.closePath(); ctx.fill();
     ctx.restore();
     textoSel(rotuloJogador(p), cx, y, 14, '#12062e', 'center', 'rgba(0,0,0,0)');
+  }
+  function rotuloModo() {
+    if (campanha.ativa) return 'CAMPANHA - FASE ' + (campanha.fase + 1) + '/' + CAMPANHA.fases.length;
+    return modo === 'cpu' ? '1P vs CPU' : '2 JOGADORES';
   }
   function rotuloJogador(p) { return modo === 'cpu' && p === 1 ? 'CPU' : 'P' + (p + 1); }
 
@@ -1292,7 +1329,10 @@
   }
 
   function desenhar() {
-    if (telaMenuPrincipal) desenharMenuPrincipal(); else desenharCena();
+    if (telaMenuPrincipal) desenharMenuPrincipal();
+    else if (telaCutscene) desenharCutscene();
+    else if (telaInter) desenharInter();
+    else desenharCena();
     if (fade.v > 0) { // transição (fundo preto)
       ctx.fillStyle = `rgba(0,0,0,${Math.min(1, fade.v)})`;
       ctx.fillRect(0, 0, CONFIG.tela.largura, CONFIG.tela.altura);
@@ -1349,6 +1389,7 @@
   function colunasSelecao() { return Math.max(1, Math.min(ELENCO.length, CONFIG.selecao.colunas)); }
 
   function abrirSelecao() {
+    campanha.ativa = false; telaInter = null; telaCutscene = false;
     telaSelecao = true;
     telaArena = false;
     sel.ok = [false, false];
@@ -1493,20 +1534,24 @@
     }
   }
 
-  function iniciarLuta() {
-    const e1 = ELENCO[sel.cur[0]], e2 = ELENCO[sel.cur[1]];
+  function iniciarLuta() { comecarLuta(ELENCO[sel.cur[0]], ELENCO[sel.cur[1]], arenaFinal); }
+
+  // monta os dois lutadores e começa a partida (usada pela seleção do arcade e pela campanha)
+  function comecarLuta(e1, e2, idxArena) {
     CONFIG.hud.nomeEsq = e1.nome;  CONFIG.hud.nomeDir = e2.nome;
     CONFIG.hud.retratoEsq = e1.retrato;  CONFIG.hud.retratoDir = e2.retrato;
     lorranny = new Lutador(e1.def, CONFIG.arena.inicioEsq, true);   // "lorranny" = jogador 1 (esquerda)
     vitor = new Lutador(e2.def, CONFIG.arena.inicioDir, false);     // "vitor" = jogador 2 (direita)
     lorranny.oponente = vitor;
     vitor.oponente = lorranny;
-    const ar = ARENAS[arenaFinal] || ARENAS[0];
+    const ar = ARENAS[idxArena] || ARENAS[0];
     CONFIG.arena.fundo = ar.fundo;
     CONFIG.arena.chaoY = ar.chaoY !== undefined ? ar.chaoY : CHAO_Y_PADRAO;
-    mostrarTags = e1 === e2 || !!CONFIG.selecao.tagSempre; // mesmo personagem nos dois lados: mostra P1/P2
+    mostrarTags = (e1 === e2 || !!CONFIG.selecao.tagSempre) && !campanha.ativa; // mesmo personagem nos dois lados: mostra P1/P2
     telaSelecao = false;
     telaArena = false;
+    telaInter = null;
+    telaCutscene = false;
     sel.vsT = null;
     novaPartida();
     atualizarRodape();
@@ -1776,6 +1821,7 @@
   }
 
   function abrirMenuPrincipal() {
+    campanha.ativa = false; telaInter = null; telaCutscene = false;
     telaMenuPrincipal = true;
     telaSelecao = false; telaArena = false;
     menuP.pagina = 'principal'; menuP.sel = 0; menuP.entrouEm = menuP.t; menuP.aviso = '';
@@ -1812,7 +1858,7 @@
       ] };
     }
     return { titulo: '', itens: [
-      { rot: 'CAMPANHA', acao: () => { menuP.aviso = 'CAMPANHA EM BREVE!'; menuP.avisoT = 1.6; } },
+      { rot: 'CAMPANHA', acao: iniciarCampanha },
       { rot: 'ARCADE', acao: () => irPagina('arcade') },
       { rot: 'CONFIGURAÇÕES', acao: () => irPagina('config') },
     ] };
@@ -2089,6 +2135,390 @@
     textoSel(ar.nome, VW / 2, 760, 14, '#d9b3ff');
   }
 
+  /* ------------------------------------------------------------------ 6d */
+  /* ---------- Modo campanha ----------
+     Fluxo: menu principal → CAMPANHA → cutscene inicial → cartão "FASE 1" → luta → cartão "FASE 2" → luta → fim.
+     Perdeu a partida: tela de derrota (tentar de novo / menu). As fases e a cutscene ficam em CONFIG.campanha. */
+  let telaCutscene = false;
+  let telaInter = null; // tela da campanha fora da luta: { tipo: 'fase' | 'derrota' | 'fim', t, sel }
+  const cena = { lista: [], i: 0, f: 0, tCena: 0, tFala: 0, linhas: [], fim: null, saindo: false };
+
+  function idxElenco(id) { return Math.max(0, ELENCO.findIndex((e) => e.id === id)); }
+  function idxArenaPorId(id) { return Math.max(0, ARENAS.findIndex((a) => a.id === id)); }
+  function faseAtual() { return CAMPANHA.fases[Math.min(campanha.fase, CAMPANHA.fases.length - 1)]; }
+  function teclaConfirma(e) { return e.code === 'Enter' || e.code === 'Space' || e.code === 'KeyA' || e.code === 'KeyF' || e.key === ','; }
+
+  function iniciarCampanha() {
+    if (!CAMPANHA.fases.length) { menuP.aviso = 'CAMPANHA EM BREVE!'; menuP.avisoT = 1.6; return; }
+    fadeOut(() => {
+      modo = 'cpu'; // um jogador contra o computador
+      campanha.ativa = true;
+      campanha.fase = 0;
+      telaMenuPrincipal = false;
+      CONFIG.hud.nomeEsq = ELENCO[idxElenco(CAMPANHA.heroi)].nome;
+      CONFIG.hud.nomeDir = ELENCO[idxElenco(faseAtual().inimigo)].nome;
+      atualizarRodape();
+      atualizarMenu();
+      if (CAMPANHA.cutsceneInicial.length) abrirCutscene(CAMPANHA.cutsceneInicial, abrirCartaFase);
+      else abrirCartaFase();
+    });
+  }
+
+  /* ---------- cutscenes ---------- */
+  const CUT = { tam: 20, entre: 34, pad: 34 };
+  function caixaCutscene() {
+    const VW = CONFIG.tela.largura, VH = CONFIG.tela.altura;
+    return { x: 48, y: VH - 262, w: VW - 96, h: 214 };
+  }
+
+  // quebra o texto em linhas que cabem na caixa
+  function quebrarLinhas(txt, larg) {
+    ctx.save();
+    ctx.font = `${CUT.tam}px ${FONTE}`;
+    const linhas = [];
+    let atual = '';
+    for (const palavra of txt.split(' ')) {
+      const teste = atual ? atual + ' ' + palavra : palavra;
+      if (atual && ctx.measureText(teste).width > larg) { linhas.push(atual); atual = palavra; } else atual = teste;
+    }
+    if (atual) linhas.push(atual);
+    ctx.restore();
+    return linhas;
+  }
+
+  function prepararFala() {
+    const fala = cena.lista[cena.i].falas[cena.f];
+    cena.linhas = quebrarLinhas(fala.texto, caixaCutscene().w - CUT.pad * 2);
+  }
+
+  function abrirCutscene(lista, aoTerminar) {
+    cena.lista = lista; cena.i = 0; cena.f = 0; cena.tCena = 0; cena.tFala = 0;
+    cena.fim = aoTerminar || null; cena.saindo = false;
+    telaCutscene = true; telaSelecao = false; telaArena = false; telaInter = null;
+    soltarTudo();
+    prepararFala();
+  }
+
+  function totalLetras() { return cena.linhas.reduce((a, l) => a + l.length, 0); }
+  function falaCompleta() { return cena.tFala * CAMPANHA.velocidadeTexto >= totalLetras(); }
+
+  function terminarCutscene() {
+    if (cena.saindo) return;
+    cena.saindo = true;
+    fadeOut(() => {
+      telaCutscene = false;
+      cena.saindo = false;
+      const cb = cena.fim; cena.fim = null;
+      if (cb) cb();
+    });
+  }
+
+  // 1º toque: completa a fala · 2º toque: próxima fala/cena
+  function avancarCutscene() {
+    if (fade.dir !== 0 || cena.saindo) return;
+    if (!falaCompleta()) { cena.tFala = 1e9; return; }
+    const sc = cena.lista[cena.i];
+    if (cena.f + 1 < sc.falas.length) { cena.f++; cena.tFala = 0; prepararFala(); return; }
+    if (cena.i + 1 < cena.lista.length) {
+      fadeOut(() => { cena.i++; cena.f = 0; cena.tCena = 0; cena.tFala = 0; prepararFala(); });
+      return;
+    }
+    terminarCutscene();
+  }
+
+  function pularCutscene() { if (fade.dir === 0) terminarCutscene(); }
+
+  function cutsceneTecla(e) {
+    if (!teclaConfirma(e)) return;
+    e.preventDefault();
+    if (!e.repeat) avancarCutscene();
+  }
+
+  function atualizarCutscene(dt) { cena.tCena += dt; cena.tFala += dt; }
+
+  // imagem da cena com um movimento lento de câmera (zoom e deriva)
+  function desenharFundoCena(sc, t) {
+    const VW = CONFIG.tela.largura, VH = CONFIG.tela.altura;
+    const im = imagens[sc.imagem];
+    if (!im) return;
+    const [z0, z1] = sc.zoom || [1, 1.06];
+    const z = z0 + (z1 - z0) * Math.min(1, t / 16);
+    if (sc.cameraX !== undefined) {
+      // mesmo enquadramento do menu principal (cameraX = coluna da imagem na borda esquerda)
+      const k = VH / im.height * z, sw = VW / k, sh = VH / k;
+      const sx = Math.max(0, Math.min(im.width - sw, sc.cameraX + Math.sin(t * 0.3) * 12));
+      ctx.drawImage(im, sx, (im.height - sh) / 2, sw, sh, 0, 0, VW, VH);
+      return;
+    }
+    const [fx, fy] = sc.foco || [0.5, 0.5];
+    const k = Math.max(VW / im.width, VH / im.height) * z;
+    const w = im.width * k, h = im.height * k;
+    const x = Math.max(VW - w, Math.min(0, VW / 2 - fx * w));
+    const y = Math.max(VH - h, Math.min(0, VH / 2 - fy * h));
+    ctx.drawImage(im, x, y, w, h);
+  }
+
+  function desenharCutscene() {
+    const VW = CONFIG.tela.largura, VH = CONFIG.tela.altura;
+    const sc = cena.lista[cena.i];
+    const fala = sc.falas[cena.f];
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.fillStyle = '#05010f';
+    ctx.fillRect(0, 0, VW, VH);
+    desenharFundoCena(sc, cena.tCena);
+
+    // vinheta e escurecimento embaixo, para o texto ficar legível
+    const gv = ctx.createRadialGradient(VW / 2, VH * 0.42, VH * 0.3, VW / 2, VH * 0.5, VH * 0.95);
+    gv.addColorStop(0, 'rgba(8,2,22,0)'); gv.addColorStop(1, 'rgba(8,2,22,0.55)');
+    ctx.fillStyle = gv; ctx.fillRect(0, 0, VW, VH);
+    const gb = ctx.createLinearGradient(0, VH * 0.55, 0, VH);
+    gb.addColorStop(0, 'rgba(8,2,22,0)'); gb.addColorStop(1, 'rgba(8,2,22,0.7)');
+    ctx.fillStyle = gb; ctx.fillRect(0, VH * 0.55, VW, VH * 0.45);
+
+    // caixa de diálogo
+    const c = caixaCutscene();
+    const ent = Math.min(1, cena.tCena / 0.35), ease = 1 - Math.pow(1 - ent, 3);
+    ctx.save();
+    ctx.globalAlpha = ease;
+    ctx.translate(0, (1 - ease) * 30);
+    ctx.save();
+    poligono([[c.x + 16, c.y], [c.x + c.w, c.y], [c.x + c.w - 16, c.y + c.h], [c.x, c.y + c.h]]);
+    ctx.fillStyle = 'rgba(14,4,38,0.88)';
+    ctx.shadowColor = '#b04bff';
+    ctx.shadowBlur = 18;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#b04bff';
+    ctx.stroke();
+    ctx.restore();
+
+    if (fala.quem) { // etiqueta com o nome de quem fala
+      const tw = fala.quem.length * 16 + 44;
+      ctx.save();
+      poligono([[c.x + 28, c.y - 36], [c.x + 28 + tw, c.y - 36], [c.x + 12 + tw, c.y + 2], [c.x + 12, c.y + 2]]);
+      ctx.fillStyle = '#6a1fc2';
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ffd24a';
+      ctx.stroke();
+      ctx.restore();
+      textoSel(fala.quem, c.x + 28 + tw / 2 - 8, c.y - 17, 16, '#fff');
+    }
+
+    // texto com efeito de máquina de escrever
+    ctx.save();
+    ctx.font = `${CUT.tam}px ${FONTE}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#f5e6ff';
+    ctx.shadowColor = 'rgba(0,0,0,0.9)';
+    ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+    let restam = Math.floor(cena.tFala * CAMPANHA.velocidadeTexto);
+    cena.linhas.forEach((linha, i) => {
+      const parte = linha.slice(0, Math.max(0, restam));
+      restam -= linha.length;
+      if (parte) ctx.fillText(parte, c.x + CUT.pad, c.y + 30 + i * CUT.entre);
+    });
+    ctx.restore();
+
+    // seta piscando quando a fala terminou de aparecer
+    if (falaCompleta() && Math.floor(performance.now() / 380) % 2 === 0) {
+      ctx.fillStyle = '#ffd24a';
+      const ax = c.x + c.w - 52, ay = c.y + c.h - 40;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + 22, ay); ctx.lineTo(ax + 11, ay + 16); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+
+    textoSel('ENTER OU A AVANÇA   ESC PULA', VW / 2, VH - 22, 10, '#a98ad8');
+  }
+
+  /* ---------- telas da campanha (cartão de fase, derrota, fim) ---------- */
+  function abrirCartaFase() {
+    campanha.ativa = true;
+    telaCutscene = false; telaSelecao = false; telaArena = false; telaMenuPrincipal = false;
+    telaInter = { tipo: 'fase', t: 0, sel: 0 };
+    CONFIG.hud.nomeEsq = ELENCO[idxElenco(CAMPANHA.heroi)].nome;
+    CONFIG.hud.nomeDir = ELENCO[idxElenco(faseAtual().inimigo)].nome;
+    atualizarRodape();
+    soltarTudo();
+  }
+
+  function abrirTelaResultado(tipo) {
+    telaInter = { tipo, t: 0, sel: 0 };
+    soltarTudo();
+  }
+
+  function iniciarLutaCampanha() {
+    const f = faseAtual();
+    comecarLuta(ELENCO[idxElenco(CAMPANHA.heroi)], ELENCO[idxElenco(f.inimigo)], idxArenaPorId(f.arena));
+  }
+
+  // fim da partida na campanha: ganhou → próxima fase (ou fim) · perdeu → tela de derrota
+  function resultadoCampanha(venceu) {
+    if (!venceu) { fadeOut(() => abrirTelaResultado('derrota')); return; }
+    campanha.fase++;
+    if (campanha.fase < CAMPANHA.fases.length) fadeOut(abrirCartaFase);
+    else fadeOut(() => abrirTelaResultado('fim'));
+  }
+
+  function opcoesInter() {
+    if (!telaInter) return [];
+    const menu = { rot: 'MENU PRINCIPAL', acao: () => fadeOut(abrirMenuPrincipal) };
+    if (telaInter.tipo === 'derrota') return [{ rot: 'TENTAR DE NOVO', acao: () => fadeOut(abrirCartaFase) }, menu];
+    if (telaInter.tipo === 'fim') return [menu];
+    return [];
+  }
+
+  function ativarInter() {
+    if (fade.dir !== 0) return;
+    const it = opcoesInter()[telaInter.sel];
+    if (it) it.acao();
+  }
+
+  function interTecla(e) {
+    if (fade.dir !== 0) return;
+    const c = e.code;
+    if (c === 'Escape') { e.preventDefault(); if (!e.repeat) fadeOut(abrirMenuPrincipal); return; }
+    if (telaInter.tipo === 'fase') {
+      if (teclaConfirma(e)) { e.preventDefault(); telaInter.t = Math.max(telaInter.t, CAMPANHA.tempoCarta); } // começa a luta já
+      return;
+    }
+    const n = opcoesInter().length;
+    if (c === 'ArrowUp' || c === 'KeyW') telaInter.sel = (telaInter.sel + n - 1) % n;
+    else if (c === 'ArrowDown' || c === 'KeyS') telaInter.sel = (telaInter.sel + 1) % n;
+    else if (teclaConfirma(e) && !e.repeat) ativarInter();
+    else return;
+    e.preventDefault();
+  }
+
+  const BTN_INTER = { y0: 500, passo: 80 };
+  function botaoInterSobMouse(ev) {
+    const r = canvas.getBoundingClientRect();
+    const x = (ev.clientX - r.left) * CONFIG.tela.largura / r.width;
+    const y = (ev.clientY - r.top) * CONFIG.tela.altura / r.height;
+    const cx = CONFIG.tela.largura / 2;
+    for (let i = 0; i < opcoesInter().length; i++) {
+      const by = BTN_INTER.y0 + i * BTN_INTER.passo;
+      if (x >= cx - BTN.w / 2 && x <= cx + BTN.w / 2 && y >= by && y <= by + BTN.h) return i;
+    }
+    return -1;
+  }
+  canvas.addEventListener('mousemove', (ev) => {
+    if (!telaInter || telaInter.tipo === 'fase') return;
+    const i = botaoInterSobMouse(ev);
+    if (i >= 0) telaInter.sel = i;
+    canvas.style.cursor = i >= 0 ? 'pointer' : '';
+  });
+  canvas.addEventListener('click', (ev) => {
+    if (telaCutscene) { avancarCutscene(); return; }
+    if (!telaInter || telaInter.tipo === 'fase') return;
+    const i = botaoInterSobMouse(ev);
+    if (i >= 0) { telaInter.sel = i; ativarInter(); }
+  });
+
+  function atualizarInter(dt) {
+    telaInter.t += dt;
+    if (telaInter.tipo === 'fase' && telaInter.t >= CAMPANHA.tempoCarta && fade.dir === 0) iniciarLutaCampanha();
+  }
+
+  function desenharInter() {
+    if (telaInter.tipo === 'fase') desenharCartaFase(); else desenharResultado();
+  }
+
+  // cartão "FASE N": a arena ao fundo e os dois lutadores se encarando
+  function desenharCartaFase() {
+    const VW = CONFIG.tela.largura, VH = CONFIG.tela.altura, T = telaInter.t;
+    const f = faseAtual();
+    const e1 = ELENCO[idxElenco(CAMPANHA.heroi)], e2 = ELENCO[idxElenco(f.inimigo)];
+    const ar = ARENAS[idxArenaPorId(f.arena)];
+    const ent = 1 - Math.pow(1 - Math.min(1, T * 1.6), 3);
+    ctx.imageSmoothingEnabled = true;
+    ctx.fillStyle = '#0b0420';
+    ctx.fillRect(0, 0, VW, VH);
+    coberturaImagem(imagens[ar.fundo], 0, 0, VW, VH, 0.45);
+    const gv = ctx.createLinearGradient(0, 0, 0, VH);
+    gv.addColorStop(0, 'rgba(18,6,46,0.85)');
+    gv.addColorStop(0.55, 'rgba(48,12,96,0.35)');
+    gv.addColorStop(1, 'rgba(12,3,30,0.9)');
+    ctx.fillStyle = gv;
+    ctx.fillRect(0, 0, VW, VH);
+
+    ctx.save();
+    ctx.shadowColor = '#c15cff';
+    ctx.shadowBlur = 16;
+    textoSel('CAMPANHA', VW / 2, 44, 14, '#d9b3ff');
+    ctx.globalAlpha = Math.min(1, T * 4);
+    ctx.shadowColor = '#ff5ad2';
+    ctx.shadowBlur = 24;
+    textoSel('FASE ' + (campanha.fase + 1), VW / 2, 100, 46 * (1 + Math.max(0, 1 - T * 5) * 0.6), '#ffd24a');
+    ctx.restore();
+
+    const baseY = 650;
+    [e1, e2].forEach((el, p) => {
+      const esq = p === 0;
+      const x = (esq ? 290 : VW - 290) + (esq ? -1 : 1) * (1 - ent) * 560;
+      ctx.save();
+      ctx.globalAlpha = 0.45;
+      ctx.fillStyle = '#000';
+      ctx.beginPath(); ctx.ellipse(x, baseY - 4, 150, 16, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      const [folha, idx] = quadroDeIdle(el.def, T);
+      desenharQuadro(el.def, folha, idx, x, baseY, esq, 1);
+      textoSel(el.nome, x, baseY + 44, 22, '#f5e6ff');
+      textoSel(esq ? 'VOCÊ' : 'INIMIGO', x, baseY + 80, 13, COR_P[p]);
+    });
+
+    ctx.save();
+    ctx.shadowColor = '#ff5ad2';
+    ctx.shadowBlur = 30;
+    textoSel('VS', VW / 2, 330, 150 * (1 + Math.max(0, 1 - T * 5) * 0.9), '#ffd24a');
+    ctx.restore();
+    textoSel(ar.nome, VW / 2, 760, 14, '#d9b3ff');
+    textoSel('ENTER OU A COMEÇA   ESC MENU', VW / 2, 792, 9, '#8a6cc0');
+  }
+
+  // telas de derrota e de fim (demo): título, frase e botões
+  function desenharResultado() {
+    const VW = CONFIG.tela.largura, VH = CONFIG.tela.altura, T = telaInter.t;
+    const derrota = telaInter.tipo === 'derrota';
+    const ar = ARENAS[idxArenaPorId(faseAtual().arena)];
+    ctx.imageSmoothingEnabled = true;
+    ctx.fillStyle = '#0b0420';
+    ctx.fillRect(0, 0, VW, VH);
+    coberturaImagem(imagens[ar.fundo], 0, 0, VW, VH, 0.3);
+    const gv = ctx.createLinearGradient(0, 0, 0, VH);
+    gv.addColorStop(0, 'rgba(18,6,46,0.9)');
+    gv.addColorStop(0.5, 'rgba(48,12,96,0.55)');
+    gv.addColorStop(1, 'rgba(12,3,30,0.95)');
+    ctx.fillStyle = gv;
+    ctx.fillRect(0, 0, VW, VH);
+
+    const ent = 1 - Math.pow(1 - Math.min(1, T * 2), 3);
+    ctx.save();
+    ctx.globalAlpha = ent;
+    ctx.translate(0, (1 - ent) * 30);
+    ctx.save();
+    ctx.shadowColor = derrota ? '#ff3a6a' : '#ff5ad2';
+    ctx.shadowBlur = 28;
+    textoSel(derrota ? 'DERROTA' : 'CONTINUA...', VW / 2, 250, derrota ? 80 : 64, derrota ? '#ff6b8a' : '#ffd24a');
+    ctx.restore();
+    textoSel(derrota ? CAMPANHA.textoDerrota : CAMPANHA.textoFim, VW / 2, 340, 13, '#d9b3ff');
+    if (!derrota) textoSel('FASES CONCLUÍDAS: ' + CAMPANHA.fases.length + '/' + CAMPANHA.fases.length, VW / 2, 390, 12, '#a98ad8');
+    ctx.restore();
+
+    opcoesInter().forEach((it, i) => {
+      const e = Math.max(0, Math.min(1, (T - 0.45 - i * 0.12) / 0.3));
+      if (e <= 0) return;
+      ctx.save();
+      ctx.globalAlpha = e;
+      desenharBotao(it.rot, VW / 2 - BTN.w / 2 + (1 - e) * 300, BTN_INTER.y0 + i * BTN_INTER.passo, i === telaInter.sel, T);
+      ctx.restore();
+    });
+    textoSel('SETAS OU W S ESCOLHEM   ENTER CONFIRMA', VW / 2, 786, 10, '#d9b3ff');
+  }
+
   /* ------------------------------------------------------------------ 7 */
   const hud = {
     especialEsq: 0, especialDir: 0,
@@ -2164,6 +2594,12 @@
   }
 
   function fimDaLuta() {
+    if (fimDeLuta.tratado) return; // já encaminhado (ex.: esperando a transição da campanha)
+    if (fimDeLuta.partida && campanha.ativa) {
+      fimDeLuta.tratado = true;
+      resultadoCampanha(fimDeLuta.partida.vencedor === lorranny); // "lorranny" = jogador 1
+      return;
+    }
     if (fimDeLuta.partida) {
       const nome = fimDeLuta.partida.vencedor === lorranny ? CONFIG.hud.nomeEsq : CONFIG.hud.nomeDir;
       novaPartida();
@@ -2200,6 +2636,10 @@
       atualizarFade(dt);
       if (telaMenuPrincipal) {
         atualizarMenuPrincipal(dt);
+      } else if (telaCutscene) {
+        atualizarCutscene(dt);
+      } else if (telaInter) {
+        atualizarInter(dt);
       } else if (telaSelecao) {
         if (!menuAberto) atualizarSelecao(dt);
       } else if (!menuAberto && paradaT > 0) {
@@ -2236,7 +2676,7 @@ if (fimDeLuta && (fimDeLuta.tempo -= dt) <= 0) {
       }
       for (const l of ['esq', 'dir']) partida.perdaT[l] = Math.max(0, partida.perdaT[l] - dt * 1.3);
       if (menuAberto) limparPendentes();
-      if (!telaSelecao && !telaMenuPrincipal) atualizarCamera(dt);
+      if (!telaSelecao && !telaMenuPrincipal && !telaCutscene && !telaInter) atualizarCamera(dt);
 
       desenhar();
       requestAnimationFrame(quadro);
@@ -2264,6 +2704,7 @@ if (fimDeLuta && (fimDeLuta.tempo -= dt) <= 0) {
         get mostrarTags() { return mostrarTags; }, get arenaFinal() { return arenaFinal; },
         energiaEspecial, ganharEspecial, especialCheio, gastarEspecial,
         get telaSelecao() { return telaSelecao; },
+        campanha, CAMPANHA, iniciarCampanha, cena, get telaCutscene() { return telaCutscene; }, get telaInter() { return telaInter; },
         get paradaT() { return paradaT; },
         get modo() { return modo; },
         definirModo, abrirMenu, fecharMenu, get menuAberto() { return menuAberto; },

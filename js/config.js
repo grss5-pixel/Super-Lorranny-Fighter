@@ -141,6 +141,45 @@ const CONFIG = {
     { id: 'sakura',  nome: 'PIER SAKURA',      fundo: 'assets/arena/arena-sakura.png' },
   ],
 
+  // Modo campanha: cutscene inicial e sequência de fases (cada fase = um inimigo numa arena).
+  // `inimigo` e `heroi` são ids do ELENCO; `arena` é o id em `arenas`.
+  // `cpu` ajusta o computador só naquela fase (pausaMin/pausaMax = tempo entre ataques; chanceDefender; alcance).
+  // Cena da cutscene: imagem + foco [x,y] (0 a 1, ponto da imagem que fica no centro) + zoom [início, fim]
+  //   (ou cameraX = recorte tipo menu principal) + falas [{ quem (opcional), texto }].
+  campanha: {
+    heroi: 'lorranny',
+    tempoCarta: 2.6,        // segundos do cartão "FASE N" antes da luta
+    velocidadeTexto: 45,    // letras por segundo nas cutscenes
+    cutsceneInicial: [
+      {
+        imagem: 'assets/ui/cena-vitor-terra.png', foco: [0.5, 0.42], zoom: [1.0, 1.08],
+        falas: [
+          { texto: 'Em um mundo onde todos são radicais, todos viviam em paz, até que...' },
+          { texto: 'Vitor, dono da empresa Crown Corp. decidiu que iria roubar toda show de bolice do mundo para si mesmo...' },
+        ],
+      },
+      {
+        imagem: 'assets/ui/cena-lorranny.png', foco: [0.55, 0.62], zoom: [1.0, 1.1],
+        falas: [
+          { texto: 'Lorranny, vendo isso, decidiu que não iria deixar barato, e partiu para impedi-lo.' },
+        ],
+      },
+      {
+        imagem: 'assets/ui/menu-fundo.png', cameraX: 258, zoom: [1.0, 1.05], // mesmo enquadramento do menu principal
+        falas: [
+          { texto: 'Ajude a Lorranny a derrotar os capangas de Vitor e devolver a radicalidade do mundo!' },
+        ],
+      },
+    ],
+    fases: [
+      { inimigo: 'manu',    arena: 'neon',   cpu: { pausaMin: 0.7, pausaMax: 1.4, chanceDefender: 0.15 } },
+      { inimigo: 'gregory', arena: 'sakura', cpu: { pausaMin: 0.5, pausaMax: 1.1, chanceDefender: 0.35 } },
+      // próxima fase (ainda não feita): { inimigo: 'vitor', arena: 'telhado', cpu: { ... } },
+    ],
+    textoDerrota: 'A RADICALIDADE DO MUNDO DEPENDE DE VOCÊ!',
+    textoFim: 'A LUTA FINAL CONTRA O VITOR VEM AÍ!',
+  },
+
   hud: {
     nomeEsq: 'LORRANNY',
     nomeDir: 'VITOR',
