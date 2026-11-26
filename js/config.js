@@ -152,9 +152,14 @@ const CONFIG = {
     velocidadeTexto: 45,    // letras por segundo nas cutscenes
     cutsceneInicial: [
       {
-        imagem: 'assets/ui/cena-vitor-terra.png', foco: [0.5, 0.42], zoom: [1.0, 1.08],
+        imagem: 'assets/ui/cena-terra.png', foco: [0.5, 0.42], zoom: [1.0, 1.08],
         falas: [
           { texto: 'Em um mundo onde todos são radicais, todos viviam em paz, até que...' },
+        ]
+      },
+      {
+        imagem: 'assets/ui/cena-vitor-terra.png', foco: [0.5, 0.42], zoom: [1.0, 1.08],
+        falas: [
           { texto: 'Vitor, dono da empresa Crown Corp. decidiu que iria roubar toda show de bolice do mundo para si mesmo...' },
         ],
       },
@@ -172,8 +177,8 @@ const CONFIG = {
       },
     ],
     fases: [
-      { inimigo: 'manu',    arena: 'neon',   cpu: { pausaMin: 0.7, pausaMax: 1.4, chanceDefender: 0.15 } },
-      { inimigo: 'gregory', arena: 'sakura', cpu: { pausaMin: 0.5, pausaMax: 1.1, chanceDefender: 0.35 } },
+      { inimigo: 'manu',    arena: 'sakura',   cpu: { pausaMin: 0.7, pausaMax: 1.4, chanceDefender: 0.15 } },
+      { inimigo: 'gregory', arena: 'neon', cpu: { pausaMin: 0.5, pausaMax: 1.1, chanceDefender: 0.35 } },
       // próxima fase (ainda não feita): { inimigo: 'vitor', arena: 'telhado', cpu: { ... } },
     ],
     textoDerrota: 'A RADICALIDADE DO MUNDO DEPENDE DE VOCÊ!',
